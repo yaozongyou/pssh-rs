@@ -1,6 +1,6 @@
 #![feature(once_cell)]
 
-use ansi_term::Colour;
+use ansi_term::Colour::{Green, Red};
 use rayon::prelude::*;
 use ssh2::Session;
 use std::io::prelude::*;
@@ -59,39 +59,49 @@ fn main() {
 
     let hosts = args.hosts.split(&[',', ';', ' ']).collect::<Vec<_>>();
     hosts.par_iter().for_each(|host| {
-        remote_exec_command(&format!("{}:{}", host, args.port), &args.username, &args.password, &args.command);
+        let addr = format!("{}:{}", host, args.port);
+        if let Err(err) = remote_exec_command(&addr, &args.username, &args.password, &args.command) {
+            println!("{}", Red.paint(format!("[{} ERROR: {}]", addr, err)));
+        }
     })
 }
 
-fn remote_exec_command(addr: &str, username: &str, password: &str, command: &str) {
-    let tcp = TcpStream::connect(addr).unwrap();
-    let mut sess = Session::new().unwrap();
+fn remote_exec_command(addr: &str, username: &str, password: &str, command: &str) -> anyhow::Result<()> {
+    let tcp = TcpStream::connect(addr)?;
+    let mut sess = Session::new()?;
     sess.set_tcp_stream(tcp);
-    sess.handshake().unwrap();
-    sess.userauth_password(username, password).unwrap();
+    sess.handshake()?;
+    sess.userauth_password(username, password)?;
 
-    let mut channel = sess.channel_session().unwrap();
-    channel.exec(command).unwrap();
+    let mut channel = sess.channel_session()?;
+    channel.exec(command)?;
 
-    let mut out = vec![];
-    let mut err = vec![];
+    let (mut out, mut err) = (vec![], vec![]);
 
     std::thread::scope(|s| {
         s.spawn(|| {
-            channel.stderr().take(1024 * 1024).read_to_end(&mut err).unwrap();
+            if let Err(err) = channel.stream(0).take(1024 * 1024).read_to_end(&mut out) {
+                println!("failed to read: {}", err);
+            }
         });
         s.spawn(|| {
-            channel.stream(0).take(1024 * 1024).read_to_end(&mut out).unwrap();
+            if let Err(err) = channel.stderr().take(1024 * 1024).read_to_end(&mut err) {
+                println!("failed to read: {}", err);
+            }
         });
     });
 
-    channel.wait_close().unwrap();
-    if channel.exit_status().unwrap() == 0 {
-        println!("{}", Colour::Green.paint(format!("[{} OK]", addr)));
+    channel.wait_close()?;
+
+    let exit_status = channel.exit_status()?;
+    if exit_status == 0 {
+        println!("{}", Green.paint(format!("[{} OK]", addr)));
     } else {
-        println!("{}", Colour::Red.paint(format!("[{} ERROR]", addr)));
+        println!("{}", Red.paint(format!("[{} ERROR: exit with {}]", addr, exit_status)));
     }
 
-    std::io::stdout().write_all(&out).unwrap();
-    std::io::stdout().write_all(&err).unwrap();
+    std::io::stdout().write_all(&out)?;
+    std::io::stdout().write_all(&err)?;
+
+    Ok(())
 }

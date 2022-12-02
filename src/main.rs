@@ -32,7 +32,7 @@ struct CommandLineArgs {
     hosts: String,
 
     /// Port
-    #[structopt(short = "P", long)]
+    #[structopt(short = "P", long, default_value = "22")]
     port: u16,
 
     /// Username

@@ -7,6 +7,8 @@ pssh-rs is a parallel ssh tool written in rust.
 ./pssh-rs -h "192.168.56.101;192.168.56.102" -uroot -pmypassword -c 'date'
 ```
 
+the hosts can be separated by comma, semicolon or spaces. 
+
 ## Building
 
 pssh-rs can be built with `cargo build --release`, or using the following

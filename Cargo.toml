@@ -13,6 +13,7 @@ structopt = "0.3"
 anyhow = "1.0"
 ansi_term = "0.12"
 rayon = "1.6"
+toml = "0.5"
 
 [build-dependencies]
 anyhow = "1.0"

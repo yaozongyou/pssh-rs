@@ -6,64 +6,24 @@ use ssh2::Session;
 use std::io::prelude::*;
 use std::io::Write;
 use std::net::TcpStream;
-use std::sync::LazyLock;
 use structopt::StructOpt;
 
-static VERSION_INFO: LazyLock<String> = LazyLock::new(|| {
-    format!(
-        "version: {} {}@{} last modified at {} build at {}",
-        env!("VERGEN_GIT_SEMVER"),
-        env!("VERGEN_GIT_SHA_SHORT"),
-        env!("VERGEN_GIT_BRANCH"),
-        env!("VERGEN_GIT_COMMIT_TIMESTAMP"),
-        env!("VERGEN_BUILD_TIMESTAMP"),
-    )
-});
+mod args;
 
-#[derive(Clone, Debug, StructOpt)]
-#[structopt(
-    name = "pssh-rs",
-    about = "pssh-rs",
-    long_version = &**VERSION_INFO,
-)]
-struct CommandLineArgs {
-    /// Password
-    #[structopt(short = "h", long)]
-    hosts: String,
-
-    /// Port
-    #[structopt(short = "P", long, default_value = "22")]
-    port: u16,
-
-    /// Username
-    #[structopt(short = "u", long)]
-    username: String,
-
-    /// Password
-    #[structopt(short = "p", long)]
-    password: String,
-
-    /// Command
-    #[structopt(short = "c", long)]
-    command: String,
-
-    /// The number of threads.
-    #[structopt(long = "num_threads", default_value = "1")]
-    num_threads: usize,
-}
-
-fn main() {
-    let args = CommandLineArgs::from_args();
+fn main() -> anyhow::Result<()> {
+    let args = args::CommandLineArgs::from_args();
+    let hosts = args.get_hosts()?;
 
     rayon::ThreadPoolBuilder::new().num_threads(args.num_threads).build_global().unwrap();
 
-    let hosts = args.hosts.split(&[',', ';', ' ']).collect::<Vec<_>>();
     hosts.par_iter().for_each(|host| {
-        let addr = format!("{}:{}", host, args.port);
-        if let Err(err) = remote_exec_command(&addr, &args.username, &args.password, &args.command) {
-            println!("{}", Red.paint(format!("[{} ERROR: {}]", addr, err)));
+        let addr = format!("{}:{}", host.host, host.port);
+        if let Err(err) = remote_exec_command(&addr, &host.username, &host.password, &args.command) {
+            println!("{}", Red.paint(format!("[{addr} ERROR: {err}]")));
         }
-    })
+    });
+
+    Ok(())
 }
 
 fn remote_exec_command(addr: &str, username: &str, password: &str, command: &str) -> anyhow::Result<()> {
@@ -81,12 +41,12 @@ fn remote_exec_command(addr: &str, username: &str, password: &str, command: &str
     std::thread::scope(|s| {
         s.spawn(|| {
             if let Err(err) = channel.stream(0).take(1024 * 1024).read_to_end(&mut out) {
-                println!("failed to read: {}", err);
+                println!("failed to read: {err}");
             }
         });
         s.spawn(|| {
             if let Err(err) = channel.stderr().take(1024 * 1024).read_to_end(&mut err) {
-                println!("failed to read: {}", err);
+                println!("failed to read: {err}");
             }
         });
     });
@@ -95,9 +55,9 @@ fn remote_exec_command(addr: &str, username: &str, password: &str, command: &str
 
     let exit_status = channel.exit_status()?;
     if exit_status == 0 {
-        println!("{}", Green.paint(format!("[{} OK]", addr)));
+        println!("{}", Green.paint(format!("[{addr} OK]")));
     } else {
-        println!("{}", Red.paint(format!("[{} ERROR: exit with {}]", addr, exit_status)));
+        println!("{}", Red.paint(format!("[{addr} ERROR: exit with {exit_status}]")));
     }
 
     std::io::stdout().write_all(&out)?;

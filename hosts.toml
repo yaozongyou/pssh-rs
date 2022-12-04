@@ -1,0 +1,28 @@
+username = "root"
+password = "aaa"
+port = 22
+hosts = [
+    "192.168.56.101",
+    "192.168.56.102"
+]
+
+
+[nginx]
+username = "ubuntu"
+password = "bbb"
+port = 22
+hosts = [
+    "192.168.57.101",
+    "192.168.57.102"
+]
+
+[[nginx.host]]
+host = "192.168.57.103"
+password = "ccc"
+port = 36000
+
+[[nginx.host]]
+host = "192.168.57.104"
+username = "root"
+password = "ddd"
+port = 36000

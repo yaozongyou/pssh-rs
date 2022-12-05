@@ -1,19 +1,19 @@
 use anyhow::{anyhow, Context};
+use lazy_static::lazy_static;
 use std::path::PathBuf;
-use std::sync::LazyLock;
 use structopt::StructOpt;
 use toml::Value;
 
-static VERSION_INFO: LazyLock<String> = LazyLock::new(|| {
-    format!(
+lazy_static! {
+    static ref VERSION_INFO: String = format!(
         "version: {} {}@{} last modified at {} build at {}",
         env!("VERGEN_GIT_SEMVER"),
         env!("VERGEN_GIT_SHA_SHORT"),
         env!("VERGEN_GIT_BRANCH"),
         env!("VERGEN_GIT_COMMIT_TIMESTAMP"),
         env!("VERGEN_BUILD_TIMESTAMP"),
-    )
-});
+    );
+}
 
 #[derive(Clone, Debug, StructOpt)]
 #[structopt(
@@ -120,8 +120,9 @@ impl CommandLineArgs {
 fn get_hosts_from_table(section: &str, table: &toml::value::Table) -> anyhow::Result<Vec<HostInfo>> {
     let mut res = vec![];
 
-    let username = get_username(table.get("username"), &get_location(section, ""))?.unwrap_or("root".to_string());
-    let password = get_password(table.get("password"), &get_location(section, ""))?.unwrap_or("".to_string());
+    let username =
+        get_username(table.get("username"), &get_location(section, ""))?.unwrap_or_else(|| "root".to_string());
+    let password = get_password(table.get("password"), &get_location(section, ""))?.unwrap_or_default();
     let port = get_port(table.get("port"), &get_location(section, ""))?.unwrap_or(22);
 
     for host in table.get("hosts").iter().flat_map(|a| a.as_array()).flatten().flat_map(|v| v.as_str()) {
@@ -134,8 +135,10 @@ fn get_hosts_from_table(section: &str, table: &toml::value::Table) -> anyhow::Re
             continue;
         }
 
-        let username = get_username(value.get("username"), &get_location(section, &host))?.unwrap_or(username.clone());
-        let password = get_password(value.get("password"), &get_location(section, &host))?.unwrap_or(password.clone());
+        let username =
+            get_username(value.get("username"), &get_location(section, &host))?.unwrap_or_else(|| username.clone());
+        let password =
+            get_password(value.get("password"), &get_location(section, &host))?.unwrap_or_else(|| password.clone());
         let port = get_port(value.get("port"), &get_location(section, &host))?.unwrap_or(port);
 
         res.push(HostInfo { username, password, port, host })
@@ -159,7 +162,7 @@ fn get_port(value: Option<&Value>, location: &str) -> anyhow::Result<Option<u16>
         return Ok(None);
     };
 
-    let value = value.as_integer().ok_or(anyhow!("port of {location} should be an u16"))?;
+    let value = value.as_integer().ok_or_else(|| anyhow!("port of {location} should be an u16"))?;
     Ok(Some(value.try_into().context(format!("port of {location} should be in the range [0, 65535]"))?))
 }
 
@@ -168,7 +171,7 @@ fn get_username(value: Option<&Value>, location: &str) -> anyhow::Result<Option<
         return Ok(None);
     };
 
-    let value = value.as_str().ok_or(anyhow!("username of {location} should be a string"))?;
+    let value = value.as_str().ok_or_else(|| anyhow!("username of {location} should be a string"))?;
     Ok(Some(value.to_string()))
 }
 
@@ -177,7 +180,7 @@ fn get_password(value: Option<&Value>, location: &str) -> anyhow::Result<Option<
         return Ok(None);
     };
 
-    let value = value.as_str().ok_or(anyhow!("password of {location} should be a string"))?;
+    let value = value.as_str().ok_or_else(|| anyhow!("password of {location} should be a string"))?;
     Ok(Some(value.to_string()))
 }
 
@@ -186,6 +189,6 @@ fn get_host(value: Option<&Value>, location: &str) -> anyhow::Result<String> {
         return Err(anyhow!("host of {location} is missing"));
     };
 
-    let value = value.as_str().ok_or(anyhow!("host of {location} should be a string"))?;
+    let value = value.as_str().ok_or_else(|| anyhow!("host of {location} should be a string"))?;
     Ok(value.to_string())
 }

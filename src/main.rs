@@ -1,5 +1,3 @@
-#![feature(once_cell)]
-
 use ansi_term::Colour::{Green, Red};
 use rayon::prelude::*;
 use ssh2::Session;

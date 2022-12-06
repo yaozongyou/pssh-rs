@@ -1,26 +1,10 @@
 use anyhow::{anyhow, Context};
-use lazy_static::lazy_static;
 use std::path::PathBuf;
 use structopt::StructOpt;
 use toml::Value;
 
-lazy_static! {
-    static ref VERSION_INFO: String = format!(
-        "version: {} {}@{} last modified at {} build at {}",
-        env!("VERGEN_GIT_SEMVER"),
-        env!("VERGEN_GIT_SHA_SHORT"),
-        env!("VERGEN_GIT_BRANCH"),
-        env!("VERGEN_GIT_COMMIT_TIMESTAMP"),
-        env!("VERGEN_BUILD_TIMESTAMP"),
-    );
-}
-
 #[derive(Clone, Debug, StructOpt)]
-#[structopt(
-    name = "pssh-rs",
-    about = "pssh-rs",
-    long_version = &**VERSION_INFO,
-)]
+#[structopt(name = "pssh-rs", about = "pssh-rs is a parallel ssh tool written in rust")]
 pub struct CommandLineArgs {
     /// toml file for config
     #[structopt(parse(from_os_str), short, long)]

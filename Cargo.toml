@@ -1,6 +1,6 @@
 [package]
 name = "pssh-rs"
-version = "0.2.0"
+version = "0.2.1"
 edition = "2021"
 description = "pssh-rs is a parallel ssh tool written in rust."
 license-file = "LICENSE"
@@ -14,8 +14,3 @@ anyhow = "1.0"
 ansi_term = "0.12"
 rayon = "1.6"
 toml = "0.5"
-lazy_static = "1.4"
-
-[build-dependencies]
-anyhow = "1.0"
-vergen = "6"

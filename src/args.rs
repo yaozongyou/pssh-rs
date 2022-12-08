@@ -3,6 +3,9 @@ use std::path::PathBuf;
 use structopt::StructOpt;
 use toml::Value;
 
+const DEFAULT_SSH_PORT: u16 = 22;
+const DEFAULT_SSH_USERNAME: &str = "root";
+
 #[derive(Clone, Debug, StructOpt)]
 #[structopt(name = "pssh-rs", about = "pssh-rs is a parallel ssh tool written in rust")]
 pub struct CommandLineArgs {
@@ -59,12 +62,12 @@ impl CommandLineArgs {
 
         let mut res = vec![];
         if using_args {
-            for host in self.hosts.iter().flat_map(|s| s.split(&[',', ';', ' '])).filter(|s| s.is_empty()) {
+            for host in self.hosts.iter().flat_map(|s| s.split(&[',', ';', ' '])).filter(|s| !s.is_empty()) {
                 res.push(HostInfo {
                     host: host.to_string(),
-                    username: self.username.clone().unwrap_or_default(),
+                    username: self.username.clone().unwrap_or_else(|| DEFAULT_SSH_USERNAME.to_string()),
                     password: self.password.clone().unwrap_or_default(),
-                    port: self.port.unwrap_or(22),
+                    port: self.port.unwrap_or(DEFAULT_SSH_PORT),
                 });
             }
             return Ok(res);
@@ -104,26 +107,25 @@ impl CommandLineArgs {
 fn get_hosts_from_table(section: &str, table: &toml::value::Table) -> anyhow::Result<Vec<HostInfo>> {
     let mut res = vec![];
 
-    let username =
-        get_username(table.get("username"), &get_location(section, ""))?.unwrap_or_else(|| "root".to_string());
-    let password = get_password(table.get("password"), &get_location(section, ""))?.unwrap_or_default();
-    let port = get_port(table.get("port"), &get_location(section, ""))?.unwrap_or(22);
+    let location = get_location(section, "");
+    let username = get_username(table.get("username"), &location)?.unwrap_or_else(|| DEFAULT_SSH_USERNAME.to_string());
+    let password = get_password(table.get("password"), &location)?.unwrap_or_default();
+    let port = get_port(table.get("port"), &location)?.unwrap_or(DEFAULT_SSH_PORT);
 
     for host in table.get("hosts").iter().flat_map(|a| a.as_array()).flatten().flat_map(|v| v.as_str()) {
         res.push(HostInfo { username: username.clone(), password: password.clone(), port, host: host.to_string() })
     }
 
     for value in table.get("host").iter().flat_map(|a| a.as_array()).flatten() {
-        let host = get_host(value.get("host"), &get_location(section, ""))?;
+        let host = get_host(value.get("host"), &location)?;
         if host.is_empty() {
             continue;
         }
 
-        let username =
-            get_username(value.get("username"), &get_location(section, &host))?.unwrap_or_else(|| username.clone());
-        let password =
-            get_password(value.get("password"), &get_location(section, &host))?.unwrap_or_else(|| password.clone());
-        let port = get_port(value.get("port"), &get_location(section, &host))?.unwrap_or(port);
+        let location = get_location(section, &host);
+        let username = get_username(value.get("username"), &location)?.unwrap_or_else(|| username.clone());
+        let password = get_password(value.get("password"), &location)?.unwrap_or_else(|| password.clone());
+        let port = get_port(value.get("port"), &location)?.unwrap_or(port);
 
         res.push(HostInfo { username, password, port, host })
     }

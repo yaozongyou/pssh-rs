@@ -5,6 +5,7 @@ use toml::Value;
 
 const DEFAULT_SSH_PORT: u16 = 22;
 const DEFAULT_SSH_USERNAME: &str = "root";
+const DEFAULT_SSH_TIMEOUT_MS: u32 = 3000;
 
 #[derive(Clone, Debug, StructOpt)]
 #[structopt(name = "pssh-rs", about = "pssh-rs is a parallel ssh tool written in rust")]
@@ -48,6 +49,7 @@ pub struct HostInfo {
     pub username: String,
     pub password: String,
     pub port: u16,
+    pub timeout_ms: u32,
 }
 
 impl CommandLineArgs {
@@ -68,6 +70,7 @@ impl CommandLineArgs {
                     username: self.username.clone().unwrap_or_else(|| DEFAULT_SSH_USERNAME.to_string()),
                     password: self.password.clone().unwrap_or_default(),
                     port: self.port.unwrap_or(DEFAULT_SSH_PORT),
+                    timeout_ms: DEFAULT_SSH_TIMEOUT_MS,
                 });
             }
             return Ok(res);
@@ -111,9 +114,16 @@ fn get_hosts_from_table(section: &str, table: &toml::value::Table) -> anyhow::Re
     let username = get_username(table.get("username"), &location)?.unwrap_or_else(|| DEFAULT_SSH_USERNAME.to_string());
     let password = get_password(table.get("password"), &location)?.unwrap_or_default();
     let port = get_port(table.get("port"), &location)?.unwrap_or(DEFAULT_SSH_PORT);
+    let timeout_ms = get_timeout_ms(table.get("timeout_ms"), &location)?.unwrap_or(DEFAULT_SSH_TIMEOUT_MS);
 
     for host in table.get("hosts").iter().flat_map(|a| a.as_array()).flatten().flat_map(|v| v.as_str()) {
-        res.push(HostInfo { username: username.clone(), password: password.clone(), port, host: host.to_string() })
+        res.push(HostInfo {
+            username: username.clone(),
+            password: password.clone(),
+            port,
+            host: host.to_string(),
+            timeout_ms,
+        })
     }
 
     for value in table.get("host").iter().flat_map(|a| a.as_array()).flatten() {
@@ -126,8 +136,9 @@ fn get_hosts_from_table(section: &str, table: &toml::value::Table) -> anyhow::Re
         let username = get_username(value.get("username"), &location)?.unwrap_or_else(|| username.clone());
         let password = get_password(value.get("password"), &location)?.unwrap_or_else(|| password.clone());
         let port = get_port(value.get("port"), &location)?.unwrap_or(port);
+        let timeout_ms = get_timeout_ms(value.get("timeout_ms"), &location)?.unwrap_or(timeout_ms);
 
-        res.push(HostInfo { username, password, port, host })
+        res.push(HostInfo { username, password, port, host, timeout_ms })
     }
 
     Ok(res)
@@ -150,6 +161,15 @@ fn get_port(value: Option<&Value>, location: &str) -> anyhow::Result<Option<u16>
 
     let value = value.as_integer().ok_or_else(|| anyhow!("port of {location} should be an u16"))?;
     Ok(Some(value.try_into().context(format!("port of {location} should be in the range [0, 65535]"))?))
+}
+
+fn get_timeout_ms(value: Option<&Value>, location: &str) -> anyhow::Result<Option<u32>> {
+    let Some(value) = value else {
+        return Ok(None);
+    };
+
+    let value = value.as_integer().ok_or_else(|| anyhow!("timeout_ms of {location} should be an u32"))?;
+    Ok(Some(value.try_into().context(format!("timeout_ms of {location} should be valid u32"))?))
 }
 
 fn get_username(value: Option<&Value>, location: &str) -> anyhow::Result<Option<String>> {

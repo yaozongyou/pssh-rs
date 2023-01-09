@@ -1,4 +1,5 @@
 use ansi_term::Colour::{Green, Red};
+use args::HostInfo;
 use rayon::prelude::*;
 use ssh2::Session;
 use std::io::prelude::*;
@@ -16,7 +17,7 @@ fn main() -> anyhow::Result<()> {
 
     hosts.par_iter().for_each(|host| {
         let addr = format!("{}:{}", host.host, host.port);
-        if let Err(err) = remote_exec_command(&addr, &host.username, &host.password, &args.command) {
+        if let Err(err) = remote_exec_command(host, &args.command) {
             println!("{}", Red.paint(format!("[{addr} ERROR: {err}]")));
         }
     });
@@ -24,12 +25,15 @@ fn main() -> anyhow::Result<()> {
     Ok(())
 }
 
-fn remote_exec_command(addr: &str, username: &str, password: &str, command: &str) -> anyhow::Result<()> {
-    let tcp = TcpStream::connect(addr)?;
+fn remote_exec_command(host: &HostInfo, command: &str) -> anyhow::Result<()> {
+    let addr = format!("{}:{}", host.host, host.port);
+    let tcp = TcpStream::connect(&addr)?;
     let mut sess = Session::new()?;
     sess.set_tcp_stream(tcp);
+    sess.set_timeout(host.timeout_ms);
     sess.handshake()?;
-    sess.userauth_password(username, password)?;
+    sess.set_timeout(0);
+    sess.userauth_password(&host.username, &host.password)?;
 
     let mut channel = sess.channel_session()?;
     channel.exec(command)?;

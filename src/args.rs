@@ -34,6 +34,10 @@ pub struct CommandLineArgs {
     #[structopt(short = "p", long)]
     password: Option<String>,
 
+    /// Timeout in milliseconds
+    #[structopt(long)]
+    timeout_ms: Option<u32>,
+
     /// The command to run remotely
     #[structopt(short = "c", long)]
     pub command: String,
@@ -70,7 +74,7 @@ impl CommandLineArgs {
                     username: self.username.clone().unwrap_or_else(|| DEFAULT_SSH_USERNAME.to_string()),
                     password: self.password.clone().unwrap_or_default(),
                     port: self.port.unwrap_or(DEFAULT_SSH_PORT),
-                    timeout_ms: DEFAULT_SSH_TIMEOUT_MS,
+                    timeout_ms: self.timeout_ms.unwrap_or(DEFAULT_SSH_TIMEOUT_MS),
                 });
             }
             return Ok(res);

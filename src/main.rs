@@ -5,6 +5,7 @@ use ssh2::Session;
 use std::io::prelude::*;
 use std::io::Write;
 use std::net::TcpStream;
+use std::time::Duration;
 use structopt::StructOpt;
 
 mod args;
@@ -27,7 +28,7 @@ fn main() -> anyhow::Result<()> {
 
 fn remote_exec_command(host: &HostInfo, command: &str) -> anyhow::Result<()> {
     let addr = format!("{}:{}", host.host, host.port);
-    let tcp = TcpStream::connect(&addr)?;
+    let tcp = TcpStream::connect_timeout(&addr.parse()?, Duration::from_millis(host.timeout_ms as u64))?;
     let mut sess = Session::new()?;
     sess.set_tcp_stream(tcp);
     sess.set_timeout(host.timeout_ms);

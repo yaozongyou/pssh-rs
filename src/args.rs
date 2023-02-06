@@ -16,7 +16,7 @@ pub struct CommandLineArgs {
 
     /// section in toml file
     #[structopt(short = "s", long)]
-    section: Option<String>,
+    sections: Option<Vec<String>>,
 
     /// hosts which can be separated by comma, semicolon or spaces
     #[structopt(short = "h", long)]
@@ -60,7 +60,7 @@ impl CommandLineArgs {
     pub fn get_hosts(&self) -> anyhow::Result<Vec<HostInfo>> {
         let using_args =
             self.hosts.is_some() || self.username.is_some() || self.password.is_some() || self.port.is_some();
-        let using_toml = self.toml.is_some() || self.section.is_some();
+        let using_toml = self.toml.is_some() || self.sections.is_some();
 
         if using_args && using_toml {
             return Err(anyhow!("using toml file as config, not also setting hosts, username, password or port args"));
@@ -88,23 +88,30 @@ impl CommandLineArgs {
                 return Err(anyhow!("illegal toml format: content of toml should be a table"));
             };
 
-            let Some(ref section) = self.section else {
+            let Some(ref sections) = self.sections else {
                 return get_hosts_from_table("", &table);
             };
 
-            if section.is_empty() {
+            if sections.is_empty() {
                 return get_hosts_from_table("", &table);
             }
 
-            let Some(section_value) = table.get(section) else {
-                return Err(anyhow!("no {} section in the toml file", section));
-            };
+            let mut res = vec![];
 
-            let Value::Table(section_table) = section_value else {
-                return Err(anyhow!("illegal section format: content of section should be a table: {}", section));
-            };
+            for section in sections {
+                let Some(section_value) = table.get(section) else {
+                    return Err(anyhow!("no {} section in the toml file", section));
+                };
 
-            return get_hosts_from_table(section, section_table);
+                let Value::Table(section_table) = section_value else {
+                    return Err(anyhow!("illegal section format: content of section should be a table: {}", section));
+                };
+
+                let mut hosts = get_hosts_from_table(section, section_table)?;
+                res.append(&mut hosts);
+            }
+
+            return Ok(res);
         }
 
         Err(anyhow!("you should using arguments to specify hosts to operate"))

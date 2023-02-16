@@ -37,8 +37,8 @@ fn remote_exec_command(host: &HostInfo, command: &str) -> anyhow::Result<()> {
     sess.userauth_password(&host.username, &host.password)?;
 
     let mut channel = sess.channel_session()?;
-    channel.setenv("PSSH_RS_IP", &host.host)?;
-    channel.setenv("PSSH_RS_PORT", &host.port.to_string())?;
+    let _ = channel.setenv("PSSH_RS_IP", &host.host);
+    let _ = channel.setenv("PSSH_RS_PORT", &host.port.to_string());
     channel.exec(command)?;
 
     let (mut out, mut err) = (vec![], vec![]);

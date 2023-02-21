@@ -45,9 +45,13 @@ pub struct CommandLineArgs {
     /// The number of threads.
     #[structopt(long = "num_threads", default_value = "1")]
     pub num_threads: usize,
+
+    /// Keep the output stable order with designated hosts.
+    #[structopt(short = "k", long = "keep_stable")]
+    pub keep_stable: bool,
 }
 
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 pub struct HostInfo {
     pub host: String,
     pub username: String,

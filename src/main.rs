@@ -5,28 +5,73 @@ use ssh2::Session;
 use std::io::prelude::*;
 use std::io::Write;
 use std::net::TcpStream;
+use std::sync::mpsc::sync_channel;
 use std::time::Duration;
 use structopt::StructOpt;
 
 mod args;
 
+struct CommandOutcome {
+    exit_status: i32,
+    out: Vec<u8>,
+    err: Vec<u8>,
+}
+
 fn main() -> anyhow::Result<()> {
     let args = args::CommandLineArgs::from_args();
     let hosts = args.get_hosts()?;
 
-    rayon::ThreadPoolBuilder::new().num_threads(args.num_threads).build_global().unwrap();
+    let (sender, receiver) = sync_channel(hosts.len());
+    std::thread::scope(|s| {
+        s.spawn({
+            let hosts = hosts.clone();
+            move || {
+                let mut command_results = Vec::with_capacity(hosts.len());
+                for _ in 0..hosts.len() {
+                    command_results.push(None);
+                }
 
-    hosts.par_iter().for_each(|host| {
-        let addr = format!("{}:{}", host.host, host.port);
-        if let Err(err) = remote_exec_command(host, &args.command) {
-            println!("{}", Red.paint(format!("[{addr} ERROR: {err}]")));
-        }
+                let mut print_index: usize = 0;
+
+                loop {
+                    let Ok((index, host, result)) = receiver.recv() else {
+                        break;
+                    };
+
+                    if !args.keep_stable {
+                        print_command_result(host, &result).unwrap();
+                        continue;
+                    }
+
+                    command_results[index] = Some((host, result));
+                    while print_index < command_results.len() {
+                        match command_results[print_index] {
+                            Some((host, ref result)) => {
+                                print_command_result(host, result).unwrap();
+                                print_index += 1;
+                            }
+                            None => {
+                                break;
+                            }
+                        }
+                    }
+                }
+            }
+        });
+
+        rayon::ThreadPoolBuilder::new().num_threads(args.num_threads).build_global().unwrap();
+        hosts.par_iter().enumerate().for_each(|(index, host)| {
+            let result = remote_exec_command(host, &args.command);
+            sender.send((index, host, result)).unwrap();
+        });
+
+        drop(sender);
     });
 
     Ok(())
 }
 
-fn remote_exec_command(host: &HostInfo, command: &str) -> anyhow::Result<()> {
+fn remote_exec_command(host: &HostInfo, command: &str) -> anyhow::Result<CommandOutcome> {
     let addr = format!("{}:{}", host.host, host.port);
     let tcp = TcpStream::connect_timeout(&addr.parse()?, Duration::from_millis(host.timeout_ms as u64))?;
     let mut sess = Session::new()?;
@@ -59,14 +104,33 @@ fn remote_exec_command(host: &HostInfo, command: &str) -> anyhow::Result<()> {
     channel.wait_close()?;
 
     let exit_status = channel.exit_status()?;
-    if exit_status == 0 {
-        println!("{}", Green.paint(format!("[{addr} OK]")));
-    } else {
-        println!("{}", Red.paint(format!("[{addr} ERROR: exit with {exit_status}]")));
+    Ok(CommandOutcome { exit_status, out, err })
+}
+
+fn print_command_result(host: &HostInfo, result: &anyhow::Result<CommandOutcome>) -> anyhow::Result<()> {
+    let addr = format!("{}:{}", host.host, host.port);
+
+    match result {
+        Ok(command_outcome) => {
+            print_command_outcome(&addr, command_outcome)?;
+        }
+        Err(err) => {
+            println!("{}", Red.paint(format!("[{addr} ERROR: {err}]")));
+        }
     }
 
-    std::io::stdout().write_all(&out)?;
-    std::io::stdout().write_all(&err)?;
+    Ok(())
+}
+
+fn print_command_outcome(addr: &str, outcomd: &CommandOutcome) -> anyhow::Result<()> {
+    if outcomd.exit_status == 0 {
+        println!("{}", Green.paint(format!("[{addr} OK]")));
+    } else {
+        println!("{}", Red.paint(format!("[{addr} ERROR: exit with {}]", outcomd.exit_status)));
+    }
+
+    std::io::stdout().write_all(&outcomd.out)?;
+    std::io::stdout().write_all(&outcomd.err)?;
 
     Ok(())
 }

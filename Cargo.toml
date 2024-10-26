@@ -1,0 +1,16 @@
+[package]
+name = "pssh-rs"
+version = "0.5.0"
+edition = "2021"
+description = "pssh-rs is a parallel ssh tool written in rust."
+license-file = "LICENSE"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+ssh2 = { version = "0.9", features = ["vendored-openssl"] }
+structopt = "0.3"
+anyhow = "1.0"
+ansi_term = "0.12"
+rayon = "1.6"
+toml = "0.5"

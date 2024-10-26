@@ -16,7 +16,7 @@ pub struct CommandLineArgs {
 
     /// section in toml file
     #[structopt(short = "s", long)]
-    sections: Option<Vec<String>>,
+    section: Option<String>,
 
     #[structopt(subcommand)]
     pub command: Command,
@@ -71,28 +71,26 @@ impl CommandLineArgs {
             return Err(anyhow!("illegal toml format: content of toml should be a table"));
         };
 
-        let Some(ref sections) = self.sections else {
+        let Some(ref section) = self.section else {
             return get_hosts_from_table(&table);
         };
 
-        if sections.is_empty() {
+        if section.is_empty() {
             return get_hosts_from_table(&table);
         }
 
         let mut res = vec![];
 
-        for section in sections {
-            let Some(section_value) = table.get(section) else {
-                return Err(anyhow!("no {} section in the toml file", section));
-            };
+        let Some(section_value) = table.get(section) else {
+            return Err(anyhow!("no {} section in the toml file", section));
+        };
 
-            let Value::Table(section_table) = section_value else {
-                return Err(anyhow!("illegal section format: content of section should be a table: {}", section));
-            };
+        let Value::Table(section_table) = section_value else {
+            return Err(anyhow!("illegal section format: content of section should be a table: {}", section));
+        };
 
-            let mut hosts = get_hosts_from_table(section_table)?;
-            res.append(&mut hosts);
-        }
+        let mut hosts = get_hosts_from_table(section_table)?;
+        res.append(&mut hosts);
 
         Ok(res)
     }
